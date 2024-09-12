@@ -107,6 +107,9 @@ class ADSConnection(pyads.Connection):
             f"Creating ADS connection {connection_name}to {ams_net_id}:{ams_net_port}"
         )
 
+        self.open_events_counter = 0
+        self.close_events_counter = 0
+
         # Initialize the parent class (pyads.Connection)
         super().__init__(
             ams_net_id=ams_net_id, ams_net_port=ams_net_port, ip_address=ip_address
@@ -260,6 +263,7 @@ class ADSConnection(pyads.Connection):
         super().open()
         logger.debug(f"Connection to {self.connection_address} opened")
         self.open_events.labels(self.ams_net_id).inc()
+        self.open_events_counter += 1
 
     def close(self):
         if not self.is_open:
@@ -268,6 +272,7 @@ class ADSConnection(pyads.Connection):
         super().close()
         logger.debug(f"Connection to {self.connection_address} closed")
         self.close_events.labels(self.ams_net_id).inc()
+        self.close_events_counter += 1
 
     @property
     def connection_address(self):

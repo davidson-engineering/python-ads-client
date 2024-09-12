@@ -24,6 +24,37 @@ from utils import (
 # ################################################################################################
 
 
+def test_context_manager_is_open(testserver_advanced, testserver_target):
+    """Test the context manager functionality."""
+    with testserver_target:
+        assert testserver_target.is_open
+    assert not testserver_target.is_open
+
+
+@pytest.mark.parametrize("variable_type", {"integers", "reals", "bools"})
+@pytest.mark.parametrize("dataset", {"single_small"})
+def test_context_manager_read(
+    testserver_advanced, testserver_target, variable_type, dataset
+):
+    [
+        testserver_target.read_by_name(var_name)
+        for var_name in TEST_DATASET[dataset][variable_type]
+    ]
+    assert testserver_target.open_events_counter == 1
+
+
+@pytest.mark.parametrize("variable_type", {"integers", "reals", "bools"})
+@pytest.mark.parametrize("dataset", {"single_small"})
+def test_context_manager_list_read(
+    testserver_advanced, testserver_target, variable_type, dataset
+):
+    """Test the context manager functionality."""
+    testserver_target.read_list_by_name(TEST_DATASET[dataset][variable_type])
+    assert testserver_target.open_events_counter == 1
+    testserver_target.read_list_by_name(TEST_DATASET[dataset][variable_type])
+    assert testserver_target.open_events_counter == 2
+
+
 @pytest.mark.parametrize("variable_type", {"integers", "reals", "bools"})
 @pytest.mark.parametrize("dataset", {"single_small"})
 def test_read_by_name(
