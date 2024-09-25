@@ -93,6 +93,7 @@ class ADSConnection(pyads.Connection):
         ams_net_port: str = pyads.PORT_TC3PLC1,
         name: str = None,
         verify_is_open: bool = False,
+        retain_connection: bool = False,
     ):
         if name:
             self.name = name
@@ -118,6 +119,14 @@ class ADSConnection(pyads.Connection):
         # Ensure connection is open if requested
         if verify_is_open:
             self._ensure_open()
+
+        self.retain_connection = retain_connection
+        if retain_connection:
+            logger.warning(
+                f"'retain_connection' is set to True. Connection {self.name} will be remain open until explicitly closed."
+            )
+
+        self._retain_connection_warning = False
 
     def _ensure_open(self):
         """Ensure the connection is open using a context manager."""
@@ -166,7 +175,7 @@ class ADSConnection(pyads.Connection):
                 )
 
     def write_array_by_name(
-        self, varName: str, value: Any, plc_datatype=None, verify: bool = False
+        self, data_name: str, value: Any, plc_datatype=None, verify: bool = False
     ) -> None:
         """Write an array to a PLC variable."""
         if plc_datatype is None:
@@ -174,12 +183,12 @@ class ADSConnection(pyads.Connection):
             plc_datatype = pyads.PLCTYPE_LREAL
         with self:
             super().write_by_name(
-                varName, value, plc_datatype=plc_datatype * len(value)
+                data_name, value, plc_datatype=plc_datatype * len(value)
             )
             if verify:
                 assert (
                     super().read_by_name(
-                        varName,
+                        data_name,
                         plc_datatype=(
                             plc_datatype * len(value) if plc_datatype else None
                         ),
@@ -195,9 +204,9 @@ class ADSConnection(pyads.Connection):
             logger.warning("No PLC datatype provided, defaulting to LREAL")
             plc_datatype = pyads.PLCTYPE_LREAL
         with self:
-            for varName, value in variables.items():
+            for data_name, value in variables.items():
                 self.write_array_by_name(
-                    varName, value, plc_datatype=plc_datatype, verify=verify
+                    data_name, value, plc_datatype=plc_datatype, verify=verify
                 )
 
     def write_list_by_name(self, variables: dict, verify: bool = False) -> None:
@@ -207,26 +216,36 @@ class ADSConnection(pyads.Connection):
             if verify:
                 assert super().read_list_by_name(variables) == variables
 
-    def read_array_by_name(self, varName: str, plc_datatype=None, array_size=1):
+    def read_by_name(self, data_name: str, plc_datatype=None) -> Any:
+        """Read a PLC variable by name."""
+        with self:
+            try:
+                return super().read_by_name(data_name, plc_datatype=plc_datatype)
+            except TypeError:
+                logger.warning(
+                    f"Variable {data_name} does not have a type declared in PLC. Ignoring read operation."
+                )
+
+    def read_array_by_name(self, data_name: str, plc_datatype=None, array_size=1):
         """Read an array from a PLC variable."""
         with self:
             return super().read_by_name(
-                varName,
+                data_name,
                 plc_datatype=plc_datatype * array_size if plc_datatype else None,
             )
 
     def read_list_array_by_name(
-        self, varNames: Union[str, list, tuple, set], plc_datatype=None, array_size=1
+        self, data_names: Union[str, list, tuple, set], plc_datatype=None, array_size=1
     ):
         """Read multiple PLC variables by their names."""
         with self:
             return {
-                varName: super().read_by_name(
-                    varName,
+                data_name: super().read_by_name(
+                    data_names,
                     plc_datatype=plc_datatype * array_size if plc_datatype else None,
                     check_length=False,
                 )
-                for varName in varNames
+                for data_name in data_names
             }
 
     def read_list_by_name(self, data_names: Union[str, list, tuple, set]):
@@ -234,11 +253,11 @@ class ADSConnection(pyads.Connection):
         with self:
             return super().read_list_by_name(data_names)
 
-    def read_errors(self, varName: str, number_of_errors=1):
+    def read_errors(self, data_name: str, number_of_errors=1):
         """Read error messages."""
         return json.dumps(
             self.read_structure_by_name(
-                varName, structure_def=ERROR_STRUCTURE, array_size=number_of_errors
+                data_name, structure_def=ERROR_STRUCTURE, array_size=number_of_errors
             )
         )
 
@@ -266,13 +285,30 @@ class ADSConnection(pyads.Connection):
         self.open_events_counter += 1
 
     def close(self):
+        if self.retain_connection:
+            if not self._retain_connection_warning:
+                logger.warning(
+                    f"'ADSConnection.close()' was called, but 'ADSConnection.retain_connection' is set to True. Connection {self.name} will be remain open until explicitly closed. This warning will not be shown again."
+                )
+                self._retain_connection_warning = True
+            return
+        self._close()
+
+    def _close(self):
         if not self.is_open:
             return
         logger.debug(f"Closing connection to {self.connection_address}")
         super().close()
-        logger.debug(f"Connection to {self.connection_address} closed")
+        logger.info(f"Connection to {self.connection_address} closed")
         self.close_events.labels(self.ams_net_id).inc()
         self.close_events_counter += 1
+
+    def ensure_closed(self):
+        """Force close the connection."""
+        self._close()
+
+    def __del__(self):
+        self._close()
 
     @property
     def connection_address(self):

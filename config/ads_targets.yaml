@@ -1,0 +1,20 @@
+PLC1:
+  ams_net_id: "5.109.60.19.1.1"
+  ip_address: "10.10.32.53"
+  ams_net_port: 851
+  update_interval: 0.1
+  data_names:
+  - MAIN.nVar1
+  - MAIN.nVar2
+  - MAIN.nVar3
+  - MAIN.nVar4
+  - MAIN.bool1
+  - MAIN.bool2
+
+# PLC2:
+#   ams_net_id: "5.109.60.19.1.1"
+#   ip_address: "10.10.32.53"
+#   ams_net_port: 851
+#   update_interval: 0.5
+#   data_names:
+

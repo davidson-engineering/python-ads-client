@@ -169,8 +169,12 @@ cython_debug/
 *.log
 logs/*.*
 
+#Ignore temporay files for testing and development
+tmp
+
 # Forced inclusions
 !.*-default
 !.env
 !.github
 !.coveragerc
+
